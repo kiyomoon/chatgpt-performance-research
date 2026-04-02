@@ -1,3 +1,4 @@
+```
 # Page just finished loading
 === ZhiNodeStats: manual dump triggered ===
 Number of Nodes: 116943
@@ -517,3 +518,5 @@ Render Object Stats:
   RenderObject live: 60209 (total created: 60326)
   RenderStyle created: 599457, cloned: 2683753
 {"cmd":"nodestats","data":"check terminal for C++ dump output","ok":true}
+
+```

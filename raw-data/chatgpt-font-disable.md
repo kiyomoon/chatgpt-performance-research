@@ -1,3 +1,4 @@
+```
 [Zhi] Zhi started (pid 76559)
 {"ready":true}
 [ZhiStyleRebuild] caller: StyleInvalidator::invalidateAllStyle (full invalidation requested)
@@ -639,3 +640,4 @@ CONSOLE JS WARN window.styleMedia is a deprecated draft version of window.matchM
 [ZhiStyle] #583: 5.4ms (recalcCount=4184)
 [ZhiStyle] #584: 5.6ms (recalcCount=4185)
 [ZhiStyle] #585: 5.3ms (recalcCount=4186)
+```

@@ -1,3 +1,4 @@
+```
 # After eval injection
 === ZhiNodeStats: manual dump triggered ===
 Number of Nodes: 126418
@@ -492,3 +493,4 @@ Render Object Stats:
   RenderObject live: 60219 (total created: 60591)
   RenderStyle created: 201266, cloned: 2217286
 {"cmd":"nodestats","data":"check terminal for C++ dump output","ok":true}
+```

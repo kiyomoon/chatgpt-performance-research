@@ -1,3 +1,4 @@
+```
 [Zhi] Zhi started (pid 40721)
 {"ready":true}
 [Zhi] → https://chatgpt.com/c/[redacted]
@@ -311,3 +312,4 @@ Render Object Stats:
 {"cmd":"nodestats","data":"check terminal for C++ dump output","ok":true}
 [ZhiStyle] #80: 9054.2ms
 [ZhiLayout] #16: 261.6ms
+```

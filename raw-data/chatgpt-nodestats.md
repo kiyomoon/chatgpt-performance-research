@@ -1,3 +1,4 @@
+```
 # Initial page load complete
 
 === ZhiNodeStats: manual dump triggered ===
@@ -721,3 +722,5 @@ Render Object Stats:
   RenderObject live: 60209 (total created: 60407)
   RenderStyle created: 356270, cloned: 1680903
 {"cmd":"nodestats","data":"check terminal for C++ dump output","ok":true}
+
+```

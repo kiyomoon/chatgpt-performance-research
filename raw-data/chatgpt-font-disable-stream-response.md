@@ -1,3 +1,4 @@
+```
 [Zhi] Zhi started (pid 78957)
 {"ready":true}
 [ZhiStyleRebuild] caller: StyleInvalidator::invalidateAllStyle (full invalidation requested)
@@ -250,3 +251,5 @@ CONSOLE NETWORK INFO Successfully preconnected to https://ab.chatgpt.com/
 [ZhiStyle] #124: 9109.3ms [FULL REBUILD] (recalcCount=4230)
 [ZhiLayout] #21: 269.5ms
 
+
+```

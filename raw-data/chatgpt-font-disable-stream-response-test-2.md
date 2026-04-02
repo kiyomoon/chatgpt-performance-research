@@ -1,3 +1,4 @@
+```
 [Zhi] Zhi started (pid 86086)
 {"ready":true}
 [ZhiStyleRebuild] caller: StyleInvalidator::invalidateAllStyle → downgraded to subtree invalidation
@@ -1395,3 +1396,4 @@ CONSOLE JS WARN window.styleMedia is a deprecated draft version of window.matchM
 [ZhiFontDebounce] fontsNeedUpdate → cache invalidation only (no full rebuild)
 [ZhiFontDebounce] fontsNeedUpdate → cache invalidation only (no full rebuild)
 [ZhiFontDebounce] fontsNeedUpdate → cache invalidation only (no full rebuild)
+```
