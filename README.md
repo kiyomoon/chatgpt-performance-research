@@ -1,32 +1,26 @@
-# Why ChatGPT Freezes on Long Conversations
+# ChatGPT Long Conversation Performance
 
-An investigation from inside the browser engine. The bottleneck isn't JavaScript or React — it's web fonts triggering infinite CSS style rebuilds.
+Investigations from inside browser engines — WebKit and Firefox — into why ChatGPT freezes on long conversations.
 
-**[Read the full article](./article_chatgpt_performance.md)** | **[View as webpage](https://kiyomoon.github.io/chatgpt-performance-research/)**
+## Articles
 
-## Key Finding
+1. **[Why ChatGPT Freezes on Long Conversations](./article_chatgpt_performance.md)** | **[Webpage](https://kiyomoon.github.io/chatgpt-performance-research/)**
+   Web font loading triggers repeated full style rebuilds in WebKit on pages with large DOMs.
 
-On ChatGPT pages with 200+ messages (~60,000 render objects), WebKit's `fontsNeedUpdate()` triggers a full style rebuild that takes **~9 seconds**. The font system keeps reporting updates, creating an infinite loop — even with the page idle in a background tab.
+2. **[How Three Browser Engines Handle Font Loading on Large Pages](./article_firefox_comparison.md)** | **[Webpage](https://kiyomoon.github.io/chatgpt-performance-research/firefox.html)**
+   A follow-up comparing how WebKit, Gecko, and Blink each handle the same situation. WebKit and Gecko measured from instrumented builds; Blink from source review.
 
 ## Repository Contents
 
 ```
-article_chatgpt_performance.md   Main article
-index.html                       Article as a standalone webpage
-technical_reports.md             Detailed technical reports (4 reports covering
-                                  performance profiling, memory breakdown,
-                                  engine-level optimization, and root cause analysis)
-raw-data/                        9 experiment data files (terminal output from
-                                  each investigation session)
+article_chatgpt_performance.md    Original investigation (WebKit)
+article_firefox_comparison.md     Three-engine comparison
+index.html                        Original article as webpage
+technical_reports.md              Detailed technical reports (WebKit)
+font-rebuild-repro/               Standalone reproduction testcase
+raw-data/                         WebKit experiment data (9 files)
+raw-data-firefox/                 Firefox experiment data (2 files)
 ```
-
-## Quick Numbers
-
-| Metric | Before | After Fix |
-|--------|--------|-----------|
-| Scroll white-screen | 9-12 sec, repeating | Eliminated |
-| Idle background rebuilds | Every ~30 sec, infinite | Eliminated |
-| Typing latency | 20-28ms | 5-14ms |
 
 ## Contact
 

@@ -267,10 +267,12 @@
 
 <p>The investigation produced four detailed technical reports covering performance profiling, memory breakdown, engine-level memory optimization, and C++ object statistics with root cause analysis, plus nine raw experiment data files. These are available in the <code>technical_reports.md</code> file and <code>raw-data/</code> directory in this repository.</p>
 
+<p>I later did a follow-up investigation in Firefox, plus a source-level comparison with Blink, to see how other browser engines handle the same font-loading scenario. That comparison is here: <a href="firefox.html">How Three Browser Engines Handle Font Loading on Large Pages</a>.</p>
+
 <p>If you work on a web application with a large DOM and notice mysterious slowdowns, the style recalculation path is worth investigating. And if you're using React 18 with Long Task monitoring, you might want to check whether your monitoring is actually seeing what you think it's seeing.</p>
 
 <div class="footer">
-<p>Reports: <a href="https://github.com/kiyomoon/chatgpt-performance-research">Repository</a> &middot; Contact: toneverdo@gmail.com</p>
+<p>Follow-up: <a href="firefox.html">Firefox Comparison</a> &middot; Reports: <a href="https://github.com/kiyomoon/chatgpt-performance-research">Repository</a> &middot; Contact: toneverdo@gmail.com</p>
 </div>
 
 </div>

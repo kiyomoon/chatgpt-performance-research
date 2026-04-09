@@ -136,6 +136,8 @@ This investigation was done by adding C++ instrumentation directly inside a WebK
 
 The investigation produced four detailed technical reports covering performance profiling, memory breakdown, engine-level memory optimization, and C++ object statistics with root cause analysis, plus nine raw experiment data files. These are available in the `technical_reports.md` file and `raw-data/` directory in this repository.
 
+I later did a follow-up investigation in Firefox, plus a source-level comparison with Blink, to see how other browser engines handle the same font-loading scenario. That comparison is here: [How Three Browser Engines Handle Font Loading on Large Pages](./article_firefox_comparison.md).
+
 If you work on a web application with a large DOM and notice mysterious slowdowns, the style recalculation path is worth investigating. And if you're using React 18 with Long Task monitoring, you might want to check whether your monitoring is actually seeing what you think it's seeing.
 
 Questions or similar findings? Reach me at toneverdo@gmail.com.

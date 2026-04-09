@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>WebKit font-triggered full style rebuild reproduction</title>
+<style>
+  body {
+    font-family: -apple-system, sans-serif;
+    font-size: 14px;
+    margin: 0;
+    padding: 20px;
+  }
+  #status {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #333;
+    color: #fff;
+    padding: 8px 16px;
+    font-family: monospace;
+    font-size: 13px;
+    z-index: 9999;
+  }
+  #container { padding-top: 40px; }
+
+  /* Simulate Tailwind-style utility classes — many rules, many selectors */
+  .msg-wrap { display: flex; flex-direction: column; padding: 12px 16px; border-bottom: 1px solid #e5e7eb; transition: background-color 0.2s ease; }
+  .msg-wrap:hover { background-color: #f9fafb; }
+  .msg-header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .msg-avatar { width: 28px; height: 28px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; transition: transform 0.15s ease; }
+  .msg-avatar:hover { transform: scale(1.1); }
+  .msg-name { font-weight: 600; font-size: 14px; color: #111827; }
+  .msg-time { font-size: 12px; color: #6b7280; margin-left: auto; }
+  .msg-body { line-height: 1.6; color: #374151; }
+  .msg-body p { margin: 4px 0; }
+  .msg-body strong { font-weight: 700; color: #111827; }
+  .msg-body em { font-style: italic; color: #4b5563; }
+  .msg-body code { font-family: monospace; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 13px; }
+  .msg-body ul { margin: 4px 0 4px 20px; }
+  .msg-body li { margin: 2px 0; }
+  .msg-actions { display: flex; gap: 4px; margin-top: 8px; opacity: 0; transition: opacity 0.2s ease; }
+  .msg-wrap:hover .msg-actions { opacity: 1; }
+  .msg-btn { padding: 4px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; color: #6b7280; cursor: pointer; background: white; transition: all 0.15s ease; }
+  .msg-btn:hover { background: #f3f4f6; color: #111827; border-color: #9ca3af; }
+  .msg-body a { color: #2563eb; text-decoration: none; transition: color 0.1s; }
+  .msg-body a:hover { color: #1d4ed8; text-decoration: underline; }
+  .msg-body blockquote { border-left: 3px solid #d1d5db; margin: 4px 0; padding: 4px 12px; color: #6b7280; }
+  .msg-body h3 { font-size: 15px; font-weight: 700; margin: 8px 0 4px; color: #111827; }
+  .msg-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 8px 0; }
+
+  /* Additional complexity: pseudo-elements, nested selectors */
+  .msg-wrap::before { content: ''; display: block; height: 0; }
+  .msg-wrap:nth-child(even) { background: #fafafa; }
+  .msg-wrap:nth-child(even):hover { background: #f3f4f6; }
+  .msg-body p:first-child { margin-top: 0; }
+  .msg-body p:last-child { margin-bottom: 0; }
+  .msg-body li::marker { color: #9ca3af; }
+</style>
+</head>
+<body>
+<div id="status">Generating DOM...</div>
+<div id="container"></div>
+
+<script>
+// ============================================================
+// Reproduction: font update triggers full style rebuild on a
+// ChatGPT-like DOM structure (nested elements, many CSS rules,
+// transitions, pseudo-elements, shadow-like complexity).
+//
+// Target: ~60,000 elements across ~450 "messages"
+// Each message: ~130 elements (matching ChatGPT's structure)
+// ============================================================
+
+const TARGET_MESSAGES = 450;  // ~130 elements each ≈ 58,500 total
+const BATCH_SIZE = 50;  // Larger batches to build DOM faster
+const status = document.getElementById('status');
+const container = document.getElementById('container');
+
+let created = 0;
+let totalElements = 0;
+
+// Generate one "message" with realistic nesting depth and variety
+function createMessage(index) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg-wrap';
+
+  // Header: avatar + name + time (3 elements)
+  const header = document.createElement('div');
+  header.className = 'msg-header';
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  const name = document.createElement('span');
+  name.className = 'msg-name';
+  name.textContent = index % 2 === 0 ? 'Assistant' : 'User';
+  const time = document.createElement('span');
+  time.className = 'msg-time';
+  time.textContent = '12:' + String(index % 60).padStart(2, '0');
+  header.appendChild(avatar);
+  header.appendChild(name);
+  header.appendChild(time);
+  wrap.appendChild(header);
+
+  // Body: mixed content (~100-120 elements)
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  // Paragraphs with inline formatting
+  for (let p = 0; p < 8; p++) {
+    const para = document.createElement('p');
+    if (p % 3 === 0) {
+      const strong = document.createElement('strong');
+      strong.textContent = 'Important point ' + p + ': ';
+      para.appendChild(strong);
+      para.appendChild(document.createTextNode('This is a sample paragraph with enough text to trigger line breaking and text layout computation. '));
+      const em = document.createElement('em');
+      em.textContent = 'Emphasis here.';
+      para.appendChild(em);
+    } else if (p % 3 === 1) {
+      para.appendChild(document.createTextNode('Regular paragraph with '));
+      const code = document.createElement('code');
+      code.textContent = 'inline code';
+      para.appendChild(code);
+      para.appendChild(document.createTextNode(' and a '));
+      const link = document.createElement('a');
+      link.href = '#';
+      link.textContent = 'hyperlink';
+      para.appendChild(link);
+      para.appendChild(document.createTextNode(' in the text.'));
+    } else {
+      para.textContent = 'Another paragraph of text that contributes to DOM size and style calculation complexity for this message node number ' + index + '.';
+    }
+    body.appendChild(para);
+  }
+
+  // List with items
+  const ul = document.createElement('ul');
+  for (let li = 0; li < 5; li++) {
+    const item = document.createElement('li');
+    const liStrong = document.createElement('strong');
+    liStrong.textContent = 'Item ' + (li + 1) + ': ';
+    item.appendChild(liStrong);
+    item.appendChild(document.createTextNode('List content with style computation.'));
+    ul.appendChild(item);
+  }
+  body.appendChild(ul);
+
+  // Heading + blockquote
+  const h3 = document.createElement('h3');
+  h3.textContent = 'Section heading for message ' + index;
+  body.appendChild(h3);
+  const bq = document.createElement('blockquote');
+  bq.textContent = 'A quoted block of text that adds depth to the DOM tree.';
+  body.appendChild(bq);
+
+  // Separator
+  const hr = document.createElement('hr');
+  body.appendChild(hr);
+
+  // More paragraphs
+  for (let p = 0; p < 4; p++) {
+    const para = document.createElement('p');
+    const span1 = document.createElement('span');
+    span1.textContent = 'Continuation text ';
+    const span2 = document.createElement('span');
+    span2.textContent = 'with nested spans ';
+    const span3 = document.createElement('span');
+    span3.textContent = 'for selector matching complexity.';
+    para.appendChild(span1);
+    para.appendChild(span2);
+    para.appendChild(span3);
+    body.appendChild(para);
+  }
+
+  wrap.appendChild(body);
+
+  // Action buttons (like ChatGPT's copy/feedback) with SVG-like elements
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+  for (let b = 0; b < 4; b++) {
+    const btn = document.createElement('button');
+    btn.className = 'msg-btn';
+    btn.textContent = ['Copy', 'Good', 'Bad', 'Share'][b];
+    actions.appendChild(btn);
+  }
+  wrap.appendChild(actions);
+
+  return wrap;
+}
+
+function createBatch() {
+  const fragment = document.createDocumentFragment();
+  for (let i = 0; i < BATCH_SIZE && created < TARGET_MESSAGES; i++, created++) {
+    fragment.appendChild(createMessage(created));
+  }
+  container.appendChild(fragment);
+  totalElements = container.querySelectorAll('*').length;
+  status.textContent = 'Creating: ' + created + '/' + TARGET_MESSAGES + ' messages (' + totalElements + ' elements)';
+
+  if (created < TARGET_MESSAGES) {
+    requestAnimationFrame(createBatch);
+  } else {
+    totalElements = document.querySelectorAll('*').length;
+    status.textContent = 'DOM complete: ' + totalElements + ' elements. Waiting 5s for layout to settle before font injection...';
+    console.log('[DOM] Complete: ' + totalElements + ' elements');
+    // Wait long enough for all layout/paint to finish before injecting font
+    setTimeout(startFontExperiment, 5000);
+  }
+}
+
+function startFontExperiment() {
+  status.textContent = totalElements + ' elements. Injecting web font in 2s...';
+
+  setTimeout(() => {
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
+
+    const injectTime = performance.now();
+    const measurements = [];
+    let lastTick = performance.now();
+
+    const timer = setInterval(() => {
+      const now = performance.now();
+      const gap = now - lastTick;
+      if (gap > 100) {
+        measurements.push({ time: now - injectTime, gap: gap });
+        console.log('[STALL] ' + gap.toFixed(0) + 'ms gap at t+' + (now - injectTime).toFixed(0) + 'ms');
+      }
+      lastTick = now;
+    }, 16);
+
+    link.onload = () => {
+      const loadTime = performance.now() - injectTime;
+      console.log('[FONT] Stylesheet loaded at t+' + loadTime.toFixed(0) + 'ms');
+
+      const applyTime = performance.now();
+      document.body.style.fontFamily = "'Inter', sans-serif";
+      console.log('[FONT] Applied to body at t+' + (applyTime - injectTime).toFixed(0) + 'ms');
+
+      setTimeout(() => {
+        clearInterval(timer);
+        const totalTime = performance.now() - injectTime;
+
+        let report = '\n=== Font Rebuild Reproduction Results ===\n';
+        report += 'DOM: ' + totalElements + ' elements, ' + TARGET_MESSAGES + ' messages\n';
+        report += 'Font loaded: t+' + loadTime.toFixed(0) + 'ms\n';
+        report += 'Font applied: t+' + (applyTime - injectTime).toFixed(0) + 'ms\n';
+        report += 'Total observation: ' + totalTime.toFixed(0) + 'ms\n';
+        report += 'Stalls (>100ms):\n';
+        if (measurements.length === 0) {
+          report += '  None detected\n';
+        } else {
+          let worst = 0;
+          measurements.forEach(m => {
+            report += '  ' + m.gap.toFixed(0) + 'ms at t+' + m.time.toFixed(0) + 'ms\n';
+            worst = Math.max(worst, m.gap);
+          });
+          report += 'Worst stall: ' + worst.toFixed(0) + 'ms\n';
+        }
+        report += '========================================\n';
+
+        console.log(report);
+        status.textContent = 'Done. ' + totalElements + ' elements. Stalls: ' + measurements.length +
+          (measurements.length > 0
+            ? ' (worst: ' + Math.max(...measurements.map(m => m.gap)).toFixed(0) + 'ms)'
+            : ' (none)') +
+          ' — see console';
+      }, 15000);
+    };
+
+    document.fonts.addEventListener('loadingdone', (e) => {
+      console.log('[FONT] loadingdone at t+' + (performance.now() - injectTime).toFixed(0) + 'ms, ' + e.fontfaces.length + ' faces');
+    });
+
+    status.textContent = 'Injecting font...';
+    document.head.appendChild(link);
+  }, 2000);
+}
+
+requestAnimationFrame(createBatch);
+</script>
+</body>
+</html>
