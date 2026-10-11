@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>$title$</title>
+<meta name="description" content="$description$">
+<style>
+  :root {
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --bg: #fff;
+    --border: #e0e0e0;
+    --code-bg: #f5f5f5;
+    --accent: #2563eb;
+    --table-stripe: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: #e0e0e0;
+      --text-secondary: #999;
+      --bg: #1a1a1a;
+      --border: #333;
+      --code-bg: #252525;
+      --accent: #60a5fa;
+      --table-stripe: #222;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.75;
+    font-size: 18px;
+  }
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 60px 24px 120px;
+  }
+  h1 {
+    font-size: 2em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95em;
+    margin-bottom: 2.5em;
+    font-style: italic;
+  }
+  h2 {
+    font-size: 1.3em;
+    margin-top: 2.5em;
+    margin-bottom: 0.6em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 1.05em;
+    margin-top: 1.8em;
+    margin-bottom: 0.6em;
+    font-weight: 700;
+  }
+  p { margin-bottom: 1.2em; }
+  strong { font-weight: 700; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5em 0;
+  }
+  code {
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1.5em;
+    font-size: 0.82em;
+    line-height: 1.6;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5em;
+    font-size: 0.9em;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 700;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ol {
+    margin: 0 0 1.5em 1.4em;
+  }
+  li {
+    margin-bottom: 0.5em;
+  }
+  .footer {
+    margin-top: 4em;
+    padding-top: 2em;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85em;
+  }
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    .container { padding: 32px 16px 80px; }
+    h1 { font-size: 1.6em; }
+    table { font-size: 0.8em; }
+    th, td { padding: 6px 8px; }
+  }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 1.5em 0;
+    padding: 0.1em 0 0.1em 1.1em;
+    color: var(--text-secondary);
+  }
+  blockquote p { margin-bottom: 0.6em; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>$title$</h1>
+<div class="subtitle">$subtitle$</div>
+
+$body$
+
+<div class="footer">
+<p>$footer$</p>
+</div>
+
+</div>
+</body>
+</html>

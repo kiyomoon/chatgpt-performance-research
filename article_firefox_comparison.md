@@ -46,7 +46,7 @@ From the Chromium source, Blink uses `InvalidateStyleAndLayoutForFontUpdates()` 
 
 I added timing probes and counters to both WebKit and Firefox. Same test pages, same machine (MacBook Air M4, 16GB).
 
-### Standalone test page (27,000 elements + Google Fonts Inter)
+### Standalone Test Page (27,000 Elements + Google Fonts Inter)
 
 **Firefox:**
 ```
@@ -64,7 +64,7 @@ fontsNeedUpdate → scheduleFullStyleRebuild
 
 All elements rebuilt. 71ms on this relatively simple page.
 
-### ChatGPT long conversation (~60,000 render objects)
+### ChatGPT Long Conversation (~60,000 Render Objects)
 
 **Firefox:**
 ```
@@ -85,7 +85,7 @@ In the specific-font-update path for "OpenAI Sans," Gecko's instrumentation reco
 
 All 60,000 render objects rebuilt. ~9 seconds. Repeating.
 
-### Style recalc during normal use
+### Style Recalc During Normal Use
 
 **Firefox (scrolling and typing on ChatGPT):**
 ```
@@ -110,6 +110,8 @@ All 60,000 render objects rebuilt. ~9 seconds. Repeating.
 | ChatGPT font update | ~9,000ms | 0.1ms (specific-font path) | Not measured |
 | Frames marked dirty | All 60,000 | 1 of 403 scanned (specific-font path) | Subtree |
 | Repeats while idle | Yes | No | Not measured (source suggests no full rebuild loop) |
+
+> **Note, October 2026:** WebKit's repetition while idle turned out to come from its memory-pressure handling on the Mac, which tells every document that fonts changed every 30 seconds once the process passes about 1 GB, not from fonts arriving. So the "Repeats while idle" row depends on what triggers the font change in each engine, which this comparison did not examine. How each engine responds to a font change, the subject of this article, is unaffected. See [The 30-Second Loop Wasn't Fonts](./article_followup_30_second_loop.md).
 
 ---
 

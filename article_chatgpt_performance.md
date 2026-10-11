@@ -1,6 +1,8 @@
 # Why ChatGPT Freezes on Long Conversations: An Investigation from Inside the Browser Engine
 
-I have a ChatGPT conversation with over 200 messages — a months-long discussion about a fantasy novel I'm writing. Every time I open it, the page freezes for 30-40 seconds. Scrolling triggers white screens that last 10 seconds. Even leaving the tab idle in the background, the page periodically locks up.
+> **Update, October 2026:** Part of this article's explanation turned out to be wrong. The full style rebuild on font changes is real, and so are both fixes. But the repetition every ~30 seconds, even when idle, does not come from web fonts arriving. It comes from WebKit's memory-pressure handling on the Mac, which discards the whole font cache and tells every document that its fonts changed. The details are in the follow-up, [The 30-Second Loop Wasn't Fonts](./article_followup_30_second_loop.md). The text below is left as originally published, with two short notes where it is wrong.
+
+I have a ChatGPT conversation with over 200 messages — a months-long discussion about a fantasy novel I'm writing. Every time I open it, the page freezes for 30–40 seconds. Scrolling triggers white screens that last 10 seconds. Even leaving the tab idle in the background, the page periodically locks up.
 
 This is a common experience. Anyone who uses ChatGPT for extended conversations knows the pain. The usual explanations are vague: "too many DOM nodes," "React is slow," "use a new conversation."
 
@@ -14,7 +16,7 @@ Here's what I found over four days of investigation. The answer surprised me.
 
 The first step was basic measurement. I added a profiling script that runs at page load, collecting DOM node counts, frame rate, and typing latency.
 
-The short version: a 252-message ChatGPT conversation creates **34,264 element nodes** as seen from JavaScript (`querySelectorAll('*')`). That's 15.7x more than a fresh conversation (2,174 elements). Each message averages about 135 elements — paragraphs, list items, code blocks, bold text, SVG icons for the copy/feedback buttons. The total C++ node count is even higher: **161,800** when you include text nodes, shadow roots, and other non-element nodes that JavaScript doesn't directly expose.
+The short version: a 252-message ChatGPT conversation creates **34,264 element nodes** as seen from JavaScript (`querySelectorAll('*')`). That's 15.7× more than a fresh conversation (2,174 elements). Each message averages about 135 elements — paragraphs, list items, code blocks, bold text, SVG icons for the copy/feedback buttons. The total C++ node count is even higher: **161,800** when you include text nodes, shadow roots, and other non-element nodes that JavaScript doesn't directly expose.
 
 Loading this page takes about 50 seconds to become interactive. During that time, the frame rate drops to near zero.
 
@@ -52,7 +54,7 @@ What followed was a systematic elimination process. I'll summarize it as a table
 | 1 | Too many DOM nodes | Enabled WebKit's built-in node statistics | Wrong — 161k nodes = 14 MB, only 1.4% of memory |
 | 2 | RenderObject tree too large | Added atomic counters in C++ constructors | Wrong — 60k objects, stable count |
 | 3 | JavaScript / React too slow | Measured JS heap | Wrong — 7 MB total |
-| 4 | Layout is the bottleneck | Added timing in layout functions | Wrong — layout takes 255-307ms (3% of freeze time) |
+| 4 | Layout is the bottleneck | Added timing in layout functions | Wrong — layout takes 255–307ms (3% of freeze time) |
 | 5 | CSS transitions cause it | Injected `transition: none !important` | Partially — reduced small recalcs by 84%, but 9-second freezes unchanged |
 | 6 | Can we just skip style recalc? | Throttled 99% of style resolution calls | Wrong — accumulated dirty flags caused a 30-minute input freeze |
 | 7 | Style recalc itself is slow | Added timing in `resolveStyle()` | Right direction — 97% of freeze time is here |
@@ -75,6 +77,8 @@ On a page with 60,000 RenderObjects, this takes 9 seconds. During those 9 second
 
 The problem is that font loading isn't a one-time event. The font system continues reporting updates (different variants arriving, fallback resolutions completing). So the cycle repeats: rebuild finishes → font update arrives → another rebuild starts → 9 more seconds of white screen. **This happens even when the page is sitting idle in a background tab with no user interaction at all.**
 
+> **Note, October 2026:** This explanation of the repetition was wrong. The repeating triggers are not fonts arriving: every 30 seconds, while the page's process uses more than about 1 GB, WebKit frees non-critical memory, and on the Mac that includes invalidating the entire font cache. See [the follow-up](./article_followup_30_second_loop.md).
+
 ## Why WebKit Does This (And Why It's Not a "Bug")
 
 When a font's metrics change, every element using that font might need different line heights, character widths, and `em`/`ex` unit values. WebKit's approach is conservative: rebuild all styles to guarantee correctness.
@@ -82,6 +86,8 @@ When a font's metrics change, every element using that font might need different
 This is perfectly reasonable when a page has 1,000 elements — the rebuild takes about 150 milliseconds, imperceptible to the user. On ChatGPT's 60,000 elements, it takes 9 seconds.
 
 It's not a bug in ChatGPT (web fonts are standard practice). It's not a bug in WebKit's font system (reporting font changes is correct behavior). It's a **pathological interaction** between two correct-by-design systems that were never tested together at this scale.
+
+> **Note, October 2026:** "Reporting font changes is correct behavior" does not hold for the repeating case: on those ticks no font has changed, yet every document is told it has. And the interaction turned out to be among three parts of WebKit itself (memory pressure, the font cache, the style system); ChatGPT only supplies a large page with a large memory footprint.
 
 ## The Fix: Two Lines of Logic
 
@@ -91,7 +97,7 @@ I made two changes inside WebKit:
 
 2. **`StyleInvalidator::invalidateAllStyle()`**: Downgraded from a full rebuild to subtree invalidation on the document element. Same correctness (all elements eventually get re-styled), but through the incremental path that can yield to the event loop.
 
-After these changes, the initial page load still has a few expensive style recalculation passes (the page is rendering 60,000+ elements for the first time, and some early font and stylesheet events still trigger large recalcs). But after that initial settling period, **zero 9-second rebuilds occur** — across scrolling, typing, streaming responses, and extended idle periods. All subsequent style recalculations complete in 5-14 milliseconds.
+After these changes, the initial page load still has a few expensive style recalculation passes (the page is rendering 60,000+ elements for the first time, and some early font and stylesheet events still trigger large recalcs). But after that initial settling period, **zero 9-second rebuilds occur** — across scrolling, typing, streaming responses, and extended idle periods. All subsequent style recalculations complete in 5–14 milliseconds.
 
 ## Results
 
@@ -99,9 +105,9 @@ The style rebuild fix (two lines of logic) addressed the freezing:
 
 | Metric | Before | After Fix | Change |
 |--------|--------|-----------|--------|
-| Scroll white-screen | 9-12 seconds, repeating | None during normal use | Eliminated |
+| Scroll white-screen | 9–12 seconds, repeating | None during normal use | Eliminated |
 | Idle background rebuilds | Every ~30 seconds, infinite | None | Eliminated |
-| Typing latency | 20-28ms median | 5-14ms | -65% |
+| Typing latency | 20–28ms median | 5–14ms | -65% |
 
 ## Separate Experiment: Memory
 

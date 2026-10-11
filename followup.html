@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The 30-Second Loop Wasn't Fonts</title>
+<meta name="description" content="Re-testing the WebKit fix six months later: the repeating full style rebuilds on long ChatGPT conversations came from WebKit's memory-pressure handling on the Mac, not from web fonts.">
+<style>
+  :root {
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --bg: #fff;
+    --border: #e0e0e0;
+    --code-bg: #f5f5f5;
+    --accent: #2563eb;
+    --table-stripe: #fafafa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: #e0e0e0;
+      --text-secondary: #999;
+      --bg: #1a1a1a;
+      --border: #333;
+      --code-bg: #252525;
+      --accent: #60a5fa;
+      --table-stripe: #222;
+    }
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.75;
+    font-size: 18px;
+  }
+  .container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 60px 24px 120px;
+  }
+  h1 {
+    font-size: 2em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  .subtitle {
+    color: var(--text-secondary);
+    font-size: 0.95em;
+    margin-bottom: 2.5em;
+    font-style: italic;
+  }
+  h2 {
+    font-size: 1.3em;
+    margin-top: 2.5em;
+    margin-bottom: 0.6em;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    font-size: 1.05em;
+    margin-top: 1.8em;
+    margin-bottom: 0.6em;
+    font-weight: 700;
+  }
+  p { margin-bottom: 1.2em; }
+  strong { font-weight: 700; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5em 0;
+  }
+  code {
+    font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin-bottom: 1.5em;
+    font-size: 0.82em;
+    line-height: 1.6;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.5em;
+    font-size: 0.9em;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 700;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ol {
+    margin: 0 0 1.5em 1.4em;
+  }
+  li {
+    margin-bottom: 0.5em;
+  }
+  .footer {
+    margin-top: 4em;
+    padding-top: 2em;
+    border-top: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.85em;
+  }
+  @media (max-width: 600px) {
+    body { font-size: 16px; }
+    .container { padding: 32px 16px 80px; }
+    h1 { font-size: 1.6em; }
+    table { font-size: 0.8em; }
+    th, td { padding: 6px 8px; }
+  }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 1.5em 0;
+    padding: 0.1em 0 0.1em 1.1em;
+    color: var(--text-secondary);
+  }
+  blockquote p { margin-bottom: 0.6em; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>The 30-Second Loop Wasn't Fonts</h1>
+<div class="subtitle">A follow-up, six months later &middot; October 2026</div>
+
+<p><em>A follow-up to <a href="index.html">Why ChatGPT Freezes on Long Conversations</a>, published April 2026.</em></p>
+<p>In April I traced a long ChatGPT conversation that froze in Safari to one line of WebKit behavior: when the font system reports a change, the document throws away every computed style and rebuilds all of them. On that page, one rebuild took about 9 seconds. It also kept happening, roughly every 30 seconds, even with the tab sitting idle.</p>
+<p>I explained the repetition by saying that web fonts keep arriving: new weights, new variants, fallback resolution, each one triggering another full rebuild. That explanation was wrong. This October, while re-testing the WebKit fix, I finally traced where the 30-second rhythm comes from. It is not fonts at all.</p>
+<h2 id="what-happened-since-april">What happened since April</h2>
+<p>I filed the issue as <a href="https://bugs.webkit.org/show_bug.cgi?id=311368">WebKit bug 311368</a>. A fix is now in review upstream (<a href="https://github.com/WebKit/WebKit/pull/63018">PR 63018</a>): instead of rebuilding every style when fonts change, WebKit now walks the tree once, restyles only the elements whose computed values depend on font metrics (units like <code>ch</code> or <code>lh</code>, <code>font-size-adjust</code>), and lets everything else pick up the new font during layout. In July a reworked version was posted, with a request on the bug to check whether it helps the case I reported.</p>
+<p>To answer that properly, I built the patch and its parent commit on the same machine, with the same timing probes in both, and ran the same conversation on each.</p>
+<h2 id="the-page-has-changed">The page has changed</h2>
+<p>The first thing I noticed is that today's ChatGPT is not the page I measured in April. It now loads history in segments and keeps only a window of the conversation in the DOM. Even after scrolling all the way to the top, only about 2,500 to 5,000 elements are mounted, against roughly 34,000 in April.</p>
+<p>That alone makes the old behavior much cheaper. On the unpatched build, each full rebuild of the conversation now takes around 100 ms, compared with about 9 seconds in my original measurements and about 1.5 seconds on late-April WebKit. The page no longer feels frozen, with or without the fix.</p>
+<h2 id="the-fix-works">The fix works</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Without the fix</th>
+<th>With the fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30-second ticks that triggered a full rebuild</td>
+<td>20 of 20</td>
+<td>0 of 22</td>
+</tr>
+<tr>
+<td>Work done per tick on the main document</td>
+<td>full rebuild, 66–105 ms</td>
+<td>targeted walk, 2.5–9.6 ms</td>
+</tr>
+<tr>
+<td>Anything over 100 ms during the session</td>
+<td>about once per tick</td>
+<td>never</td>
+</tr>
+</tbody>
+</table>
+<p>The standalone testcase I attached to the bug in April shows the same: a 45 ms full rebuild becomes a 4.5 ms walk.</p>
+<p>The improvement is structural rather than dramatic on today's page. The cost of the old path grows with the number of elements on the page. The new path still visits every element, but only does real work for the handful that need it.</p>
+<h2 id="where-the-30-seconds-come-from">Where the 30 seconds come from</h2>
+<p>The clue was in the logs all along. Each 30-second tick did not reach just the ChatGPT document. In the same millisecond, the font-change notification arrived at every document in the process: the main page, an embedded frame from another OpenAI domain, and an empty <code>about:blank</code> iframe. An empty iframe loads no fonts. Something below the page was announcing a font change to everyone at once.</p>
+<p>So I attached a debugger to the page's process and stopped every time WebKit's font cache was invalidated. Every tick produced the same call stack:</p>
+<pre><code>MemoryPressureHandler::measurementTimerFired     every 30 s
+  releaseMemory(non-critical)                    over the threshold
+    FontCache::releaseNoncriticalMemory
+      FontCache::platformReleaseNoncriticalMemory  Mac only
+        FontCache::invalidate()                  drop all font data
+          -&gt; every document: &quot;fonts changed&quot;
+            -&gt; unpatched WebKit: rebuild every style</code></pre>
+<p>In plain terms: every 30 seconds, WebKit checks how much memory the page's process uses. Above a threshold (on a Mac, about 1 GB by default), it frees memory it considers non-critical. On macOS, part of that is discarding the entire font cache, and discarding the font cache tells every document that its fonts have changed. Nothing about the fonts has changed, but each document has to assume they did, and before the fix that meant restyling every element.</p>
+<p>To make sure, I logged the memory figure WebKit itself computes on each tick. On the unpatched build, the one tick at 936 MB, below the threshold, was followed by nothing. Every tick above it, at 1,055 to 1,553 MB, was followed in the same millisecond by font-change notifications to every document. Under the threshold the loop stops; above it, it never does.</p>
+<h2 id="what-this-changes-in-the-april-article">What this changes in the April article</h2>
+<ul>
+<li><strong>Still correct:</strong> a font change makes unpatched WebKit rebuild every style, and on a large page that takes seconds. Both fixes, mine from April and the one now in review, cut exactly that link, so they hold no matter what triggers the change.</li>
+<li><strong>Still correct as an observation:</strong> the rebuilds repeat about every 30 seconds, even when idle.</li>
+<li><strong>Wrong:</strong> "font loading isn't a one-time event." Real web-font loads cause a few rebuilds while the page opens. The endless repetition comes from memory-pressure handling on the Mac.</li>
+<li><strong>Weaker than I said:</strong> I wrote that this is not a bug in WebKit's font system because reporting font changes is correct behavior. On these ticks, no font changed.</li>
+<li><strong>Different cast:</strong> I described two well-designed systems, ChatGPT's fonts and WebKit's style engine, colliding at scale. In fact three parts of WebKit (memory pressure, the font cache, the style system) produce the loop on their own. ChatGPT only contributes what any heavy page can: lots of elements and over a gigabyte of memory.</li>
+</ul>
+<p>It also explains why the bug was hard to reproduce. You need a Mac, a page whose process grows past about 1 GB, and a few minutes on that page. A short conversation never gets there, and neither does my small testcase. The first attempts on the bug to reproduce it on ChatGPT failed, and now that makes sense.</p>
+<h2 id="what-is-still-open">What is still open</h2>
+<p>With the fix, each tick no longer triggers a full rebuild, but WebKit still treats it as "every font changed" and checks every element on the page every 30 seconds. On today's ChatGPT that costs a few milliseconds. On a larger page it would cost more, for a font change that never happened. I asked on the bug whether freeing memory should notify documents about fonts at all.</p>
+<h2 id="the-lesson-im-taking-from-this">The lesson I'm taking from this</h2>
+<p>In April the clue was already in my own table: "every ~30 seconds." Fonts don't finish downloading on a schedule. A perfectly regular interval is a timer, and timers usually belong to the engine, not the network. I wrote the number down and explained it with the first plausible story instead of tracing who was calling. This time the one question that settled it was the simplest: when this function runs, who called it?</p>
+<hr />
+<p><em>Links: <a href="https://bugs.webkit.org/show_bug.cgi?id=311368">WebKit bug 311368</a> · <a href="https://github.com/WebKit/WebKit/pull/63018">PR 63018</a> · <a href="index.html">Original article</a> · <a href="firefox.html">Three-engine comparison</a></em></p>
+
+<div class="footer">
+<p>Original Investigation: <a href="index.html">WebKit Article</a> &middot; <a href="firefox.html">Firefox Comparison</a> &middot; Repository: <a href="https://github.com/kiyomoon/chatgpt-performance-research">Repository</a> &middot; Contact: toneverdo@gmail.com</p>
+</div>
+
+</div>
+</body>
+</html>

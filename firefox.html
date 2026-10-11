@@ -134,6 +134,13 @@
     table { font-size: 0.8em; }
     th, td { padding: 6px 8px; }
   }
+  blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 1.5em 0;
+    padding: 0.1em 0 0.1em 1.1em;
+    color: var(--text-secondary);
+  }
+  blockquote p { margin-bottom: 0.6em; }
 </style>
 </head>
 <body>
@@ -143,145 +150,125 @@
 <div class="subtitle">A follow-up comparison of WebKit, Gecko, and Blink &middot; April 2026</div>
 
 <p>After finding that ChatGPT freezes on Safari due to <a href="index.html">web font loading triggering full style rebuilds</a>, I noticed the same page works fine on Firefox. I was curious why.</p>
-
 <p>I compiled Firefox from source, added the same kind of C++ instrumentation I'd used in WebKit, and measured what happens when a web font loads on a large page. The results turned out to be interesting — each of the three major engines handles this situation differently.</p>
-
-<hr>
-
-<h2>What Happens When a Font Loads</h2>
-
+<hr />
+<h2 id="what-happens-when-a-font-loads">What Happens When a Font Loads</h2>
 <p>When a web font finishes downloading, the browser needs to update text that uses that font — dimensions may have changed, lines may need to re-wrap. The question is: which elements need updating?</p>
-
-<h3>WebKit</h3>
-
+<h3 id="webkit">WebKit</h3>
 <p>WebKit's <code>Document::fontsNeedUpdate()</code> calls <code>scheduleFullStyleRebuild()</code>. This recalculates CSS styles for every element in the DOM, regardless of whether it uses the changed font. On a ChatGPT page with 60,000 render objects, this takes about 9 seconds.</p>
-
 <pre><code>Document::fontsNeedUpdate()
   → scheduleFullStyleRebuild()
   → resolveStyle(ResolveStyleType::Rebuild)
   → walks all 60,000 RenderObjects</code></pre>
-
-<h3>Gecko (Firefox)</h3>
-
-<p>Gecko's <code>nsPresContext::UserFontSetUpdated()</code> has two paths. When called without a specific font (for example, a font rule change), it calls <code>PostRebuildAllStyleDataEvent</code> — a broader rebuild similar in spirit to WebKit's approach. The raw logs show many of these during page load.</p>
-
-<p>But when a <em>specific</em> font finishes loading, it takes a targeted path: <code>nsFontFaceUtils::MarkDirtyForFontChange()</code>, which walks the frame tree and checks each frame: does this frame's computed <code>font-family</code> actually reference the font that just loaded? Only matching frames get marked dirty.</p>
-
+<h3 id="gecko-firefox">Gecko (Firefox)</h3>
+<p>Gecko's <code>nsPresContext::UserFontSetUpdated()</code> has two paths. When called without a specific font (e.g., a font rule change), it calls <code>PostRebuildAllStyleDataEvent</code> — a broader rebuild similar in spirit to WebKit's approach. The raw logs show many of these during page load.</p>
+<p>But when a <em>specific</em> font finishes loading, it takes a targeted path: <code>nsFontFaceUtils::MarkDirtyForFontChange()</code>, which walks the frame tree and checks each frame: does this frame's computed font-family actually reference the font that just loaded? Only matching frames get marked dirty.</p>
 <pre><code>nsPresContext::UserFontSetUpdated(aUpdatedFont)
   → if aUpdatedFont is null:
       PostRebuildAllStyleDataEvent (rule change — broader rebuild)
   → if aUpdatedFont is set:
       nsFontFaceUtils::MarkDirtyForFontChange(root, aUpdatedFont)
       (only matching frames marked for reflow)</code></pre>
-
-<h3>Blink (Chrome)</h3>
-
+<h3 id="blink-chrome">Blink (Chrome)</h3>
 <p>From the Chromium source, Blink uses <code>InvalidateStyleAndLayoutForFontUpdates()</code> which calls <code>MarkSubtreeNeedsStyleRecalcForFontUpdates()</code> — a subtree marking approach. I didn't instrument Blink for this investigation, so I don't have timing data.</p>
-
-<hr>
-
-<h2>Measured Data</h2>
-
+<hr />
+<h2 id="measured-data">Measured Data</h2>
 <p>I added timing probes and counters to both WebKit and Firefox. Same test pages, same machine (MacBook Air M4, 16GB).</p>
-
-<h3>Standalone Test Page (27,000 Elements + Google Fonts Inter)</h3>
-
+<h3 id="standalone-test-page-27000-elements--google-fonts-inter">Standalone Test Page (27,000 Elements + Google Fonts Inter)</h3>
 <p><strong>Firefox:</strong></p>
-
-<pre><code>UserFontSetUpdated("Inter") → MarkDirtyForFontChange: 12.1ms
+<pre><code>UserFontSetUpdated(&quot;Inter&quot;) → MarkDirtyForFontChange: 12.1ms
   scanned=57,616 frames, markedDirty=450</code></pre>
-
 <p>57,616 frames scanned. 450 marked dirty (0.8%).</p>
-
 <p><strong>WebKit (with fix reverted to original behavior):</strong></p>
-
 <pre><code>fontsNeedUpdate → scheduleFullStyleRebuild
 [ZhiStyle]: 71.0ms [FULL REBUILD]</code></pre>
-
 <p>All elements rebuilt. 71ms on this relatively simple page.</p>
-
-<h3>ChatGPT Long Conversation (~60,000 Render Objects)</h3>
-
+<h3 id="chatgpt-long-conversation-60000-render-objects">ChatGPT Long Conversation (~60,000 Render Objects)</h3>
 <p><strong>Firefox:</strong></p>
-
-<pre><code>UserFontSetUpdated("OpenAI Sans") → MarkDirtyForFontChange: 0.2ms
+<pre><code>UserFontSetUpdated(&quot;OpenAI Sans&quot;) → MarkDirtyForFontChange: 0.2ms
   scanned=403 frames, markedDirty=1
-UserFontSetUpdated("OpenAI Sans") → MarkDirtyForFontChange: 0.1ms
+UserFontSetUpdated(&quot;OpenAI Sans&quot;) → MarkDirtyForFontChange: 0.1ms
   scanned=403 frames, markedDirty=1</code></pre>
-
 <p>In the specific-font-update path for "OpenAI Sans," Gecko's instrumentation recorded scanning 403 frames and marking 1 dirty. Note that this is the targeted font-matching path only — it's not directly comparable to WebKit's full render object count, but it shows how narrow Gecko's invalidation is for this particular font update.</p>
-
 <p><strong>WebKit:</strong></p>
-
 <pre><code>[ZhiStyle] #13: 8947.2ms [FULL REBUILD]
 [ZhiStyle] #14: 12005.7ms [FULL REBUILD]
 ... repeats every ~30 seconds while idle ...</code></pre>
-
 <p>All 60,000 render objects rebuilt. ~9 seconds. Repeating.</p>
-
-<h3>Style Recalc During Normal Use</h3>
-
+<h3 id="style-recalc-during-normal-use">Style Recalc During Normal Use</h3>
 <p><strong>Firefox (scrolling and typing on ChatGPT):</strong></p>
-
-<pre><code>[ZhiGeckoStyle] #6: 756.7ms
-[ZhiGeckoStyle] #10-#50: 10-28ms</code></pre>
-
+<pre><code>[ZhiGeckoStyle] #6: 756.7ms    ← worst case during initial render
+[ZhiGeckoStyle] #10-#50: 10-28ms  ← steady state</code></pre>
 <p><strong>WebKit (page idle, no interaction):</strong></p>
-
 <pre><code>[ZhiStyle] #30: 9013.5ms [FULL REBUILD]
 [ZhiStyle] #38: 9527.2ms [FULL REBUILD]
 ... continues indefinitely ...</code></pre>
-
-<hr>
-
-<h2>Summary</h2>
-
+<hr />
+<h2 id="summary">Summary</h2>
 <table>
-<tr><th></th><th>WebKit</th><th>Gecko</th><th>Blink</th></tr>
-<tr><td>Strategy</td><td>Full style rebuild</td><td>Per-frame font matching (for specific font updates)</td><td>Subtree marking</td></tr>
-<tr><td>ChatGPT font update</td><td>~9,000ms</td><td>0.1ms (specific-font path)</td><td>Not measured</td></tr>
-<tr><td>Frames marked dirty</td><td>All 60,000</td><td>1 of 403 scanned (specific-font path)</td><td>Subtree</td></tr>
-<tr><td>Repeats while idle</td><td>Yes</td><td>No</td><td>Not measured (source suggests no full rebuild loop)</td></tr>
+<thead>
+<tr>
+<th></th>
+<th>WebKit</th>
+<th>Gecko</th>
+<th>Blink</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Strategy</td>
+<td>Full style rebuild</td>
+<td>Per-frame font matching (for specific font updates)</td>
+<td>Subtree marking</td>
+</tr>
+<tr>
+<td>ChatGPT font update</td>
+<td>~9,000ms</td>
+<td>0.1ms (specific-font path)</td>
+<td>Not measured</td>
+</tr>
+<tr>
+<td>Frames marked dirty</td>
+<td>All 60,000</td>
+<td>1 of 403 scanned (specific-font path)</td>
+<td>Subtree</td>
+</tr>
+<tr>
+<td>Repeats while idle</td>
+<td>Yes</td>
+<td>No</td>
+<td>Not measured (source suggests no full rebuild loop)</td>
+</tr>
+</tbody>
 </table>
-
-<h2>What Makes Gecko's Approach Work</h2>
-
+<blockquote>
+<p><strong>Note, October 2026:</strong> WebKit's repetition while idle turned out to come from its memory-pressure handling on the Mac, which tells every document that fonts changed every 30 seconds once the process passes about 1 GB, not from fonts arriving. So the "Repeats while idle" row depends on what triggers the font change in each engine, which this comparison did not examine. How each engine responds to a font change, the subject of this article, is unaffected. See <a href="followup.html">The 30-Second Loop Wasn't Fonts</a>.</p>
+</blockquote>
+<hr />
+<h2 id="what-makes-geckos-approach-work">What Makes Gecko's Approach Work</h2>
 <p>The key function is <code>nsFontFaceUtils::MarkDirtyForFontChange()</code> in <code>layout/style/nsFontFaceUtils.cpp</code> — about 140 lines of code. It does a straightforward tree walk:</p>
-
-<ol>
+<ol type="1">
 <li>For each frame, check if its <code>font-family</code> CSS property references the loaded font</li>
 <li>If yes, verify the font group actually contains this specific font entry</li>
 <li>Only matching frames get a reflow scheduled</li>
 <li>If a frame is already marked dirty, skip its descendants (they'll be handled as part of the parent's reflow)</li>
 </ol>
-
 <p>It also distinguishes between frames that use the font for rendering versus frames that use font-metric-dependent units (<code>em</code>, <code>ch</code>), applying the minimum necessary invalidation for each case.</p>
-
 <p>On ChatGPT, this means: "OpenAI Sans" is used in very few places (probably UI chrome rather than message content). Gecko figures this out in 0.1ms by checking 403 frames. WebKit doesn't check — it rebuilds everything.</p>
-
-<hr>
-
-<h2>A Note on ChatGPT's Font</h2>
-
+<hr />
+<h2 id="a-note-on-chatgpts-font">A Note on ChatGPT's Font</h2>
 <p>An interesting detail: ChatGPT recently switched from "Inter" to "OpenAI Sans" (their own custom font). This doesn't change the analysis — WebKit's <code>fontsNeedUpdate()</code> triggers a full rebuild regardless of which font updated. But it does explain why Gecko's scan is so fast on ChatGPT specifically: the custom font appears to be used in relatively few elements.</p>
-
-<hr>
-
-<h2>Methodology</h2>
-
-<p><strong>WebKit:</strong> Personal fork with C++ timing probes. Details in the <a href="index.html">original article</a> and the <a href="https://github.com/kiyomoon/chatgpt-performance-research/blob/main/technical_reports.md">technical reports</a>.</p>
-
+<hr />
+<h2 id="methodology">Methodology</h2>
+<p><strong>WebKit:</strong> Personal fork with C++ timing probes. Details in <a href="./technical_reports.md">technical reports</a> and <a href="index.html">the original article</a>.</p>
 <p><strong>Gecko:</strong> Compiled from mozilla-central (April 2026). Added <code>printf</code> and <code>mozilla::TimeStamp</code> probes in:</p>
-
-<ol>
+<ul>
 <li><code>layout/base/nsPresContext.cpp</code> — <code>UserFontSetUpdated()</code> timing and caller identification</li>
 <li><code>layout/style/nsFontFaceUtils.cpp</code> — frame scan and dirty counters in <code>MarkDirtyForFontChange()</code></li>
 <li><code>layout/style/RestyleManager.cpp</code> — <code>ProcessPendingRestyles()</code> timing (&gt;5ms threshold)</li>
-</ol>
-
+</ul>
 <p><strong>Blink:</strong> Source code review only.</p>
-
-<p>Raw experiment data is in the <a href="https://github.com/kiyomoon/chatgpt-performance-research/tree/main/raw-data">raw-data/</a> (WebKit) and <a href="https://github.com/kiyomoon/chatgpt-performance-research/tree/main/raw-data-firefox">raw-data-firefox/</a> (Firefox) directories.</p>
+<p>Raw experiment data is in <code>raw-data/</code> (WebKit) and <code>raw-data-firefox/</code> (Firefox).</p>
 
 <div class="footer">
 <p>Original Investigation: <a href="index.html">WebKit Article</a> &middot; Repository: <a href="https://github.com/kiyomoon/chatgpt-performance-research">GitHub</a> &middot; Contact: toneverdo@gmail.com</p>
